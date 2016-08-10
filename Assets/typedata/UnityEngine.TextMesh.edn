@@ -1,0 +1,10 @@
+System.Single characterSize
+UnityEngine.Color color
+System.Int32 fontSize
+System.Single lineSpacing
+System.String name
+System.Single offsetZ
+System.Boolean richText
+System.Single tabSize
+System.String tag
+System.String text

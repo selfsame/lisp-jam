@@ -11,7 +11,7 @@
   (atom (try (read-string (slurp "levels.edn")) 
              (catch Exception e {}))))
 
-(def ASSETS (atom [:ball-spawn :tree-spawn]))
+(def ASSETS (atom [:ball-spawn :tree-spawn :eye-spawn :rocket-spawn]))
 
 
 (def status (atom "dev"))

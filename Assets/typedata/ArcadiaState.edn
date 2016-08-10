@@ -1,0 +1,5 @@
+System.Boolean enabled
+System.Boolean isActiveAndEnabled
+System.String name
+System.String tag
+System.Boolean useGUILayout

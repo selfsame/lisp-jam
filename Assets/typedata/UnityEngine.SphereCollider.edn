@@ -1,0 +1,7 @@
+UnityEngine.Vector3 center
+System.Single contactOffset
+System.Boolean enabled
+System.Boolean isTrigger
+System.String name
+System.Single radius
+System.String tag

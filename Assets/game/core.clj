@@ -8,13 +8,14 @@
     hard.core hard.input hard.mesh hard.physics
     pdfn.core
     game.editor
-    game.constraints))
+    game.constraints
+    game.guys))
 
 (declare fire-bullet make-level impact)
 
 (def orbit-height 2.0)
 (def speed        0.5)
-(def bullet-speed 2.0)
+(def bullet-speed 1.6)
   
 (deftween [:trail-renderer :time] [this]
   {:base (.GetComponent this UnityEngine.TrailRenderer)
@@ -29,12 +30,17 @@
 
 
 
-
+(defn rocket-bank [o n]
+  (let [rk (child-named o "rocket")
+    eng (child-named o "Cube.001")]
+    (rotate! rk (v3 0 0 n))
+    ;(rotate! eng (local-direction eng (v3 0 0 n)))
+    ))
 
 (defn ship-keys [o]
   (if (key-down? "escape") (make-level))
-  (if (key? "a") (rotate! o (v3 0 -1.8 0)))
-  (if (key? "d") (rotate! o (v3 0 1.8 0)))
+  (if (key? "a") (do (rocket-bank o -2) (rotate! o (v3 0 -1.8 0))))
+  (if (key? "d") (do (rocket-bank o 2) (rotate! o (v3 0 1.8 0))))
   (if (key? "w") (update-state! o :speed #(min (state o :max-speed) (+ % 0.1))))
   (if (key? "s") (update-state! o :speed #(max 0 (- % 0.1)))))
 
@@ -145,14 +151,15 @@
 
 (defn fire-bullet [o]
   (let [side (:gun-toggle (update-state! o :gun-toggle #(* -1 %)))
-        bullet (clone! :bullet (v3+ (->v3 o) (local-direction o (v3 3 0 (* 1.0 side)))))]
-    (set! (.rotation (.transform bullet)) (.rotation (.transform o)))
+        bullet (clone! :bullet (v3+ (->v3 o) (local-direction o (v3 10 0 (* 1.0 side)))))]
+    (rotation! bullet (rotation o))
     (state! bullet {
       :bullet true
       :speed bullet-speed
       :damage 20
       :force true
       :hover-distance 3.0})
+    (hook+ bullet :update #'game.core/update-bullet)
     (hook+ bullet :update #'game.core/update-bullet)
     (hook+ (first (children bullet)) :on-trigger-enter #'game.core/on-trigger)
     (timeline*
@@ -167,7 +174,7 @@
 
 (defn update-camera [o]
   (let [target (the cam-target)]
-    (position! o (lerp (->v3 o) (->v3 target) 0.2))
+    (position! o (lerp (->v3 o) (->v3 target) 0.17))
     (rotation! o (Quaternion/Lerp (rotation o) (rotation target) 0.15))))
 
 
@@ -184,19 +191,20 @@
 
 (defn make-level []
   (clear-cloned!)
-  (clone! :sun)
+  (clone! :sun1)
+  (clone! :sun2)
   (clone! :EventSystem)
   (clone! :Canvas)
-  (let [p (clone! :planet2)
+  (let [p (clone! :planet4)
         spawn (first (children p))
         s (clone! :ship (->v3 spawn))
         cam (clone! :camera)] 
   (rotation! s (rotation spawn))
   (state! s {
     :ship true
-    :speed 0.5
-    :max-speed 1.0
-    :hover-distance 3.0
+    :speed 0
+    :max-speed 1.1
+    :hover-distance 5.0
     :gun-toggle 1
     :hp 200
     :max-hp 200})
@@ -215,62 +223,10 @@
 
 
 
-
-
-
-
-(def radar-v3s (vertices (resource "icosphere42")))
-
-(defn ball-update [o]
-  (when (rand-nth [nil nil nil true])
-    (let [
-
-      pos (->v3 o)
-      hits 
-      (remove nil? 
-        (for [v radar-v3s
-              :let [ray (Ray pos v)
-                    hit (planet-hit ray)]] hit))
-      points (map (prop* point) hits)
-      rel-points (map #(v3- % pos ) points)
-      inverse-points (map 
-        #(v3* (.normalized %) 
-              (pow2  (/ 8 (+ 1 (Mathf/Log (.magnitude %)))))) rel-points)
-      
-      gravity (v3div (reduce v3+ inverse-points) (max 1 (count points)))]
-      (set-state! o :gravity gravity)))
-    (do 
-      (let [body (->rigidbody o)
-            gfv3 (clamp-v3 (v3* (state o :gravity) 20) -1000 1000)]
-      (global-force! body  (.x gfv3)(.y gfv3)(.z gfv3))
-      (torque! body  0 0 60))))
-
-(defn ball-gizmos [o]
-  (let [pos (->v3 o)]
-    (gizmo-color (color 1 0 0))
-    (gizmo-ray pos (v3* (state o :gravity) 10))))
-
-(defn ball-test [v]
-  (let [ball (clone! :ball v)]
-    (state! ball {
-      :ball true 
-      :gravity (v3 0)
-      :body true
-      :hp 200})
-    (hook+ ball :update #'game.core/ball-update)
-    ;(hook+ ball :on-draw-gizmos #'game.core/ball-gizmos)
-    ball))
-
-(defn init-ball [o]
-  (let [sc (?f 2.0 8.0)
-        ball (ball-test (v3+ (->v3 o) (local-direction o (->v3 0 (* sc 0.5) 0))))]
-    (local-scale! ball (v3 sc))
-    (set! (.rotation (.transform ball)) (.rotation (.transform o)))))
-
 (defn init-spawn [o]
   (let [obj (clone! (or (state o :obj) :empty) (->v3 o))
         sc (or (?f (or (state o :scale-min) 1) (or (state o :scale-max) 1)))]
-    (set! (.rotation (.transform obj)) (.rotation (.transform o)))
+    (rotation! obj (rotation o))
     (if (state o :scale-min)
       (local-scale! obj (?f (or (state o :scale-min) 1) (or (state o :scale-max) 1))))
     (if (state o :rand-y)

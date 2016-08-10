@@ -1,0 +1,14 @@
+System.Boolean castShadows
+System.Boolean enabled
+System.Boolean isPartOfStaticBatch
+System.Boolean isVisible
+System.Int32 lightmapIndex
+System.String name
+System.Int32 realtimeLightmapIndex
+System.Boolean receiveShadows
+System.Int32 sortingLayerID
+System.String sortingLayerName
+System.Int32 sortingOrder
+System.Int32 staticBatchIndex
+System.String tag
+System.Boolean useLightProbes

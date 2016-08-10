@@ -1,0 +1,15 @@
+System.Int32 childCount
+UnityEngine.Vector3 eulerAngles
+UnityEngine.Vector3 forward
+System.Boolean hasChanged
+UnityEngine.Vector3 localEulerAngles
+UnityEngine.Vector3 localPosition
+UnityEngine.Quaternion localRotation
+UnityEngine.Vector3 localScale
+UnityEngine.Vector3 lossyScale
+System.String name
+UnityEngine.Vector3 position
+UnityEngine.Vector3 right
+UnityEngine.Quaternion rotation
+System.String tag
+UnityEngine.Vector3 up

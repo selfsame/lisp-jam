@@ -1,0 +1,8 @@
+UnityEngine.Vector3 center
+System.Single contactOffset
+System.Boolean enabled
+UnityEngine.Vector3 extents
+System.Boolean isTrigger
+System.String name
+UnityEngine.Vector3 size
+System.String tag

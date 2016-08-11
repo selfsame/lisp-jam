@@ -9,7 +9,8 @@
     pdfn.core
     game.editor
     game.constraints
-    game.guys))
+    game.guys
+    game.world))
 
 (declare fire-bullet make-level impact)
 
@@ -59,6 +60,7 @@
 (defn update-ship [o]
   (constrain-to-planet o)
   (ship-keys o)
+  (set! (.* (the light)>Light.intensity) (float (or (state o :speed) 0.0)))
   (move o))
 
 (defn update-bullet [o]
@@ -189,37 +191,39 @@
       level)) nil))
 
 
-(defn make-level []
-  (clear-cloned!)
-  (clone! :sun1)
-  (clone! :sun2)
-  (clone! :EventSystem)
-  (clone! :Canvas)
-  (let [p (clone! :planet4)
-        spawn (first (children p))
-        s (clone! :ship (->v3 spawn))
-        cam (clone! :camera)] 
-  (rotation! s (rotation spawn))
-  (state! s {
-    :ship true
-    :speed 0
-    :max-speed 1.1
-    :hover-distance 5.0
-    :gun-toggle 1
-    :hp 200
-    :max-hp 200})
-  (timeline* (wait 0) (populate-level))
-  (timeline* :loop 
-    #(if (key? "space")
-         (do (fire-bullet s) false) true)
-    (wait 0.2))
-  (hook+ s :update           #'game.core/update-ship)
-  (hook+ s :update           #'game.core/update-hud)
-  
-  (hook+ cam :on-draw-gizmos #'game.editor/editor-gizmos)
-  (hook+ cam :update         #'game.editor/editor-update)
-  (hook+ cam :update         #'game.core/update-camera)
-  (hook+ s :on-trigger-enter #'game.core/on-trigger)))
+(defn make-level 
+  ([] (make-level :planet1))
+  ([k] 
+    (clear-cloned!)
+    (clone! :EventSystem)
+    (clone! :Canvas)
+    (let [p (clone! k)
+          pstate (state p)
+          spawn (child-named p "spawn")
+          s (clone! :ship (->v3 spawn))
+          cam (clone! :camera)] 
+    (rotation! s (rotation spawn))
+    (skyball (:sky pstate :miami))
+    (state! s {
+      :ship true
+      :speed 0
+      :max-speed 1.1
+      :hover-distance 5.0
+      :gun-toggle 1
+      :hp 200
+      :max-hp 200})
+    (timeline* (wait 0) (populate-level))
+    (timeline* :loop 
+      #(if (key? "space")
+           (do (fire-bullet s) false) true)
+      (wait 0.2))
+    (hook+ s :update           #'game.core/update-ship)
+    (hook+ s :update           #'game.core/update-hud)
+    
+    (hook+ cam :on-draw-gizmos #'game.editor/editor-gizmos)
+    (hook+ cam :update         #'game.editor/editor-update)
+    (hook+ cam :update         #'game.core/update-camera)
+    (hook+ s :on-trigger-enter #'game.core/on-trigger))))
 
 
 
@@ -234,9 +238,9 @@
 
 
 
-(make-level)
+(make-level :planet4)
 
-
+;(set-state!  (Selection/activeGameObject) :speed 3)
 
 
 '(state! (the tree-spawn) {
@@ -245,4 +249,5 @@
   :scale-max 1.5
   :rand-y true}) 
 '(hook+ (Selection/activeGameObject) :start #'game.core/init-spawn)
+'(set-state! (Selection/activeGameObject) :sky :bird)
 '(clear-cloned!)

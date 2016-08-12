@@ -47,6 +47,7 @@
   (if (key-down? "escape") (make-level))
   (if (and (key-down? "p") (key? "j")) (make-level :planet4))
   (if (and (key-down? "p") (key? "j")(key? "a")) (make-level :planet5))
+  (if (and (key-down? "p") (key? "j")(key? "l")) (make-level :planet6))
   (if (key? "a") (do (rocket-bank o -2) (rotate! o (v3 0 (∆ (* 35 -1.8)) 0))))
   (if (key? "d") (do (rocket-bank o 2) (rotate! o (v3 0 (∆ (* 35 1.8)) 0))))
   (if (key? "w") (update-state! o :speed #(min (state o :max-speed) 
@@ -68,12 +69,13 @@
         crv-mod  (- sp (.magnitude (v3- desired last-pos)))
         fixed    (v3+ opos (local-direction o (v3 (+ sp crv-mod) 0 0)))]
     (set! (.position (.transform o)) fixed)
-    (set-state! o :last-pos (->v3 o))))
+    (set-state! o :last-pos (>v3 o))))
 
 (defn update-ship [^GameObject o]
   (constrain-to-planet o)
   (if (state o :ai) (ai-keys o) (ship-keys o))
-  (set! (.* (the light)>Light.intensity) (float (or (state o :speed) 0.0)))
+  (when-let [^UnityEngine.Light light (.GetComponentInChildren o UnityEngine.Light)]
+    (set! (.intensity light) (float (or (state o :speed) 0.0))))
   (move o))
 
 (defn update-bullet [o]
@@ -81,7 +83,7 @@
     (constrain-to-planet o)
     (move o)
     (let [heading (local-direction o (v3 1 0 0))
-          ray (Ray. (->v3 o) heading)
+          ray (Ray. (>v3 o) heading)
           hits (filter #(cmpt (gobj (.collider %)) ArcadiaState) (ray-hits ray (state o :speed)))]
        (mapv
         #(impact o (state o) (.collider %) (state (.collider %)) %) hits))))
@@ -103,13 +105,13 @@
 (defn splode 
   ([p] (splode p 1))
   ([p bigness]
-    (let [base (clone! :empty (->v3 p))]
+    (let [base (clone! :empty (>v3 p))]
       (dorun (for [i (range (inc (or bigness 5)))
                    :let [rp (?sphere 2.0)
                          fire (clone! :fire)]]
         (do 
           (parent! fire base)
-          (position! fire (->v3 base))
+          (position! fire (>v3 base))
           (rotation! fire (?rotation))
           (set! (.localScale (.transform fire)) (v3 0.2))
           (timeline* 
@@ -159,7 +161,7 @@
 (pdfn impact [a as b bs h] nil)
 (pdfn impact [a ^:force as b ^:body bs h]
   (let [body (->rigidbody b)
-        fv (v3* (v3- (->v3 b) (.point h)) 100) 
+        fv (v3* (v3- (>v3 b) (.point h)) 100) 
         fx (splode a (int (* 0.1 (state a :damage))))]
         (position! fx (.point h))
         (parent! fx b)
@@ -175,7 +177,7 @@
 
 (defn fire-bullet [o]
   (let [side (:gun-toggle (update-state! o :gun-toggle #(* -1 %)))
-        bullet (clone! :bullet (v3+ (->v3 o) (local-direction o (v3 10 0 (* 1.0 side)))))]
+        bullet (clone! :bullet (v3+ (>v3 o) (local-direction o (v3 10 0 (* 1.0 side)))))]
     (rotation! bullet (rotation o))
     (state! bullet {
       :bullet true
@@ -205,7 +207,7 @@
 
 (defn update-camera [o]
   (let [target (the cam-target)]
-    (position! o (lerp (->v3 o) (->v3 target) (∆ (* 35 0.17))))
+    (position! o (Vector3/Lerp (>v3 o) (>v3 target) (∆ (* 35 0.17))))
     (rotation! o (Quaternion/Lerp (rotation o) (rotation target) (∆ (* 35 0.15))))))
 
 
@@ -226,6 +228,29 @@
           (catch Exception e (log e)))) 
       level)) nil))
 
+'(local-position (the cam-target))
+'(local-rotation (the cam-target))
+
+(def cam-settings {
+  :planet1 "[#unity/Vector3 [-3.9 40.9 0.0]
+#unity/Quaternion [0.3861523 0.5923567 -0.3861524 0.5923566]]"
+:planet4 "[#unity/Vector3 [-19.0 22.4 0.0]
+#unity/Quaternion [0.2031946 0.6772828 -0.2031946 0.6772828]]"
+:planet6 "[#unity/Vector3 [-21.03 5.68 0.0]
+#unity/Quaternion [0.01628914 0.7069191 -0.01628914 0.7069191]]"
+:planet5 "[#unity/Vector3 [-16.97 3.6 0.0] #unity/Quaternion [-0.01561059 0.7069345 0.01561059 0.7069345]]"})
+
+
+(defn cam-config [k]
+  (when-let [d (get cam-settings k)]
+    ((fn [[p q]] (local-position! (the cam-target) p)
+      (local-rotation! (the cam-target) q))
+      (read-string d))))
+
+'(make-level :planet3)
+
+
+
 
 (defn make-level 
   ([] (make-level @current-level))
@@ -237,16 +262,17 @@
     (let [p (clone! k)
           pstate (state p)
           spawn (child-named p "spawn")
-          s (clone! :ship (->v3 spawn))
+          s (clone! :ship (>v3 spawn))
           cam (clone! :camera)] 
     (populate-level p)
     (rotation! s (rotation spawn))
+    (timeline* (wait 0) (if (cam-settings k) (cam-config k)))
     (skyball (:sky pstate :miami))
     (state! s {
       :ship true
       :speed 0
-      :max-speed 0.7
-      :hover-distance 7.0
+      :max-speed 0.6
+      :hover-distance 7.5
       :gun-toggle 1
       :hp 200
       :max-hp 200})
@@ -265,7 +291,7 @@
 
 
 (defn init-spawn [o]
-  (let [obj (clone! (or (state o :obj) :empty) (->v3 o))
+  (let [obj (clone! (or (state o :obj) :empty) (>v3 o))
         sc (or (?f (or (state o :scale-min) 1) (or (state o :scale-max) 1)))]
     (rotation! obj (rotation o))
     (if (state o :scale-min)
@@ -286,10 +312,10 @@
   (timeline* 
     ;(tween {:camera {:field-of-view 55}} cam 3.0 {:out :pow3})
     #(not (Input/anyKeyDown))
-    ;(tween {:camera {:field-of-view 178}} cam 1.5 {:in :pow3})
+    (tween {:camera {:field-of-view 178}} cam 1.5 {:in :pow3})
     #(do (make-level :planet1) false))))
 
-'(intro-screen nil)
+'(intro-sscreen nil)
 
 
 '(set-state!  (Selection/activeGameObject) :ai true)
@@ -303,21 +329,6 @@
 '(set-state! (Selection/activeGameObject) :star true)
 '(clear-cloned!)
 
-'(local-position (the cam-target))
-'(local-rotation (the cam-target))
-
-(def cam-settings {
-:planet6 "[#unity/Vector3 [-14.1 11.3 0.0]
-#unity/Quaternion [-0.4741202 -0.4595214 0.6634804 -0.351915]]"
-:planet5 "[#unity/Vector3 [-12.92 6.5 0.0]
-#unity/Quaternion [0.09551297 0.7006264 -0.08907695 0.7014737]]"})
 
 
-(defn cam-config [k]
-  (when-let [d (get cam-settings k)]
-    ((fn [[p q]] (local-position! (the cam-target) p)
-      (local-rotation! (the cam-target) q))
-      (read-string d))))
-
-'(cam-config :planet5)
 

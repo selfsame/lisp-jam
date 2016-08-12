@@ -3,8 +3,7 @@
     RenderSettings)
   (:use 
     arcadia.core arcadia.linear 
-    hard.core hard.physics
-    clojure.pprint)
+    hard.core hard.physics)
   (:require [arcadia.introspection :as intro]))
 
 (def RECORD (atom {}))

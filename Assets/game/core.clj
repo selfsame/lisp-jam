@@ -1,6 +1,6 @@
 (ns game.core
   (:import ArcadiaState 
-    [UnityEngine Ray])
+    [UnityEngine Ray Input])
   (:require tween.pool)
   (:use
     arcadia.core arcadia.linear
@@ -14,13 +14,20 @@
 
 (declare fire-bullet make-level impact)
 
-(def orbit-height 2.0)
+(def orbit-height 8.0)
 (def speed        0.5)
 (def bullet-speed 1.6)
+
+(defonce current-level (atom :planet1))
   
 (deftween [:trail-renderer :time] [this]
   {:base (.GetComponent this UnityEngine.TrailRenderer)
    :get (.time this)
+   :tag System.Single})
+
+(deftween [:camera :field-of-view] [this]
+  {:base (.GetComponent this UnityEngine.Camera)
+   :get (.fieldOfView this)
    :tag System.Single})
 
 (defn ->data-haver [o]
@@ -32,34 +39,40 @@
 
 
 (defn rocket-bank [o n]
-  (let [rk (child-named o "rocket")
-    eng (child-named o "Cube.001")]
-    (rotate! rk (v3 0 0 n))
-    ;(rotate! eng (local-direction eng (v3 0 0 n)))
-    ))
+  #_(let [rk (get (children o) 1)]
+    ;(rotate! rk (v3 0 0 (∆ (* n 35))))
+    #_(rotate! eng (local-direction eng (v3 0 0 n))) ) )
 
 (defn ship-keys [o]
   (if (key-down? "escape") (make-level))
-  (if (key? "a") (do (rocket-bank o -2) (rotate! o (v3 0 -1.8 0))))
-  (if (key? "d") (do (rocket-bank o 2) (rotate! o (v3 0 1.8 0))))
-  (if (key? "w") (update-state! o :speed #(min (state o :max-speed) (+ % 0.1))))
-  (if (key? "s") (update-state! o :speed #(max 0 (- % 0.1)))))
+  (if (and (key-down? "p") (key? "j")) (make-level :planet4))
+  (if (and (key-down? "p") (key? "j")(key? "a")) (make-level :planet5))
+  (if (key? "a") (do (rocket-bank o -2) (rotate! o (v3 0 (∆ (* 35 -1.8)) 0))))
+  (if (key? "d") (do (rocket-bank o 2) (rotate! o (v3 0 (∆ (* 35 1.8)) 0))))
+  (if (key? "w") (update-state! o :speed #(min (state o :max-speed) 
+    (+ % (∆ (* 35 0.01 ))))))
+  (if (key? "s") (update-state! o :speed #(max 0.2 (- % (∆ (* 35 0.01)))))))
+
+(defn ai-keys [o]
+  (if (< -0.5 (sin (* Time/time 0.6))) (do (rocket-bank o -2) (rotate! o (v3 0 -1.8 0))))
+  (if (> 0.5 (cos (* Time/time 1.1))) (do (rocket-bank o 2) (rotate! o (v3 0 1.8 0))))
+  (if true (update-state! o :speed #(min (state o :max-speed) (+ % 0.1))))
+  (if (< -0.3 (cos (* 0.2 Time/time)) )  (update-state! o :speed #(max 0 (- % 0.1)))))
 
 
-
-
-(defn move [o]
-  (let [sp       (or (state o :speed) speed)
-        last-pos (or (state o :last-pos) (->v3 o))
-        desired  (v3+ (->v3 o) (local-direction o (v3 sp 0 0)))
+(defn move [^GameObject o]
+  (let [opos     (.position (.transform o))
+        sp       (∆ (* 35 (or (state o :speed) speed)))
+        last-pos (or (state o :last-pos) opos)
+        desired  (v3+ opos (local-direction o (v3 sp 0 0)))
         crv-mod  (- sp (.magnitude (v3- desired last-pos)))
-        fixed    (v3+ (->v3 o) (local-direction o (v3 (+ sp crv-mod) 0 0)))]
-    (position! o fixed)
+        fixed    (v3+ opos (local-direction o (v3 (+ sp crv-mod) 0 0)))]
+    (set! (.position (.transform o)) fixed)
     (set-state! o :last-pos (->v3 o))))
 
-(defn update-ship [o]
+(defn update-ship [^GameObject o]
   (constrain-to-planet o)
-  (ship-keys o)
+  (if (state o :ai) (ai-keys o) (ship-keys o))
   (set! (.* (the light)>Light.intensity) (float (or (state o :speed) 0.0)))
   (move o))
 
@@ -77,8 +90,14 @@
 
 
 
+(defn spin [o] (rotate! o (v3 0 (∆ 62) 0)))
 
-
+(defn gate-update [o]
+  (if (the star)
+    (set-state! o :active false)
+    (do 
+      (set! (.* (child-named o "center")>Light.intensity) (float 1.0))
+      (set-state! o :active true))))
 
 
 (defn splode 
@@ -115,7 +134,8 @@
 
 
 (defpdfn trigger-dispatch)
-(pdfn trigger-dispatch [a as b bs] (log [(.name a) (.name b)]))
+(pdfn trigger-dispatch [a as b bs] ;(log [(.name a) (.name b)])
+  )
 (pdfn trigger-dispatch [a ^:damage as b ^:hp bs]
   (splode a (int (* 0.1 (state a :damage))))
   (update-state! b :hp #(- % (state a :damage)))
@@ -125,8 +145,10 @@
 
 (pdfn trigger-dispatch [a ^:damage as b ^:body bs])
 
-(pdfn trigger-dispatch [a ^:ship as b ^:obstacle bs]
-  (make-level))
+(pdfn trigger-dispatch [a ^:ship as b ^:star bs] (destroy b))
+(pdfn trigger-dispatch [a ^:ship as b ^:gate bs] 
+  (if (:active bs) 
+    (timeline* (wait 0) (make-level (:gate bs)))))
 
 (defn on-trigger [o c]
   (let [other (.gameObject c)
@@ -170,30 +192,45 @@
               :trail-renderer {:time 0.0}} bullet 0.6)
       #(destroy! bullet))))
 
+
+(defonce clock (atom 0))
+
 (defn update-hud [o]
   (let [health-rect-tform (cmpt (the health-bar) UnityEngine.RectTransform)]
-    (set! (.sizeDelta health-rect-tform)  (v2 (state o :hp) 17))))
+    #_(set! (.sizeDelta health-rect-tform)  (v2 (state o :hp) 17))
+    Time/deltaTime
+    (swap! clock #(+ % Time/deltaTime))
+    (set! (.* (the time)>Text.text) (str  (int (/ @clock 60)) ":" (int (mod @clock 60))))
+    (set! (.* (the stars)>Text.text) (str  " " (count (every star))))))
 
 (defn update-camera [o]
   (let [target (the cam-target)]
-    (position! o (lerp (->v3 o) (->v3 target) 0.17))
-    (rotation! o (Quaternion/Lerp (rotation o) (rotation target) 0.15))))
+    (position! o (lerp (->v3 o) (->v3 target) (∆ (* 35 0.17))))
+    (rotation! o (Quaternion/Lerp (rotation o) (rotation target) (∆ (* 35 0.15))))))
 
 
 
-(defn populate-level []
+(defn populate-level [planet]
   (let [planet (the #"planet.*")
         pk (keyword (.name planet))
         level (get @LEVELS pk)]
     (dorun (map 
       (fn [o]
-        (rotation! (parent! (clone! (:type o) (:position o)) planet) (:rotation o))) 
+
+        (try 
+          (state! 
+            (rotation! 
+              (parent! (clone! (:type o) (:position o)) planet) 
+              (:rotation o))
+            (:state o))
+          (catch Exception e (log e)))) 
       level)) nil))
 
 
 (defn make-level 
-  ([] (make-level :planet1))
+  ([] (make-level @current-level))
   ([k] 
+    (reset! current-level k)
     (clear-cloned!)
     (clone! :EventSystem)
     (clone! :Canvas)
@@ -202,17 +239,17 @@
           spawn (child-named p "spawn")
           s (clone! :ship (->v3 spawn))
           cam (clone! :camera)] 
+    (populate-level p)
     (rotation! s (rotation spawn))
     (skyball (:sky pstate :miami))
     (state! s {
       :ship true
       :speed 0
-      :max-speed 1.1
-      :hover-distance 5.0
+      :max-speed 0.7
+      :hover-distance 7.0
       :gun-toggle 1
       :hp 200
       :max-hp 200})
-    (timeline* (wait 0) (populate-level))
     (timeline* :loop 
       #(if (key? "space")
            (do (fire-bullet s) false) true)
@@ -220,7 +257,7 @@
     (hook+ s :update           #'game.core/update-ship)
     (hook+ s :update           #'game.core/update-hud)
     
-    (hook+ cam :on-draw-gizmos #'game.editor/editor-gizmos)
+    ;(hook+ cam :on-draw-gizmos #'game.editor/editor-gizmos)
     (hook+ cam :update         #'game.editor/editor-update)
     (hook+ cam :update         #'game.core/update-camera)
     (hook+ s :on-trigger-enter #'game.core/on-trigger))))
@@ -238,16 +275,49 @@
 
 
 
-(make-level :planet4)
+(defn intro-screen [_]
+  (clear-cloned!)
+  (skyball :meridian)
+  (let [scene   (clone! :introscene)
+        cam (child-named scene "camera")]
 
-;(set-state!  (Selection/activeGameObject) :speed 3)
+  (reset! clock 0)
+  
+  (timeline* 
+    ;(tween {:camera {:field-of-view 55}} cam 3.0 {:out :pow3})
+    #(not (Input/anyKeyDown))
+    ;(tween {:camera {:field-of-view 178}} cam 1.5 {:in :pow3})
+    #(do (make-level :planet1) false))))
 
+'(intro-screen nil)
+
+
+'(set-state!  (Selection/activeGameObject) :ai true)
 
 '(state! (the tree-spawn) {
   :obj :tree
   :scale-min 0.8
   :scale-max 1.5
   :rand-y true}) 
-'(hook+ (Selection/activeGameObject) :start #'game.core/init-spawn)
-'(set-state! (Selection/activeGameObject) :sky :bird)
+'(hook+ (Selection/activeGameObject) :start #'game.core/intro-screen)
+'(set-state! (Selection/activeGameObject) :star true)
 '(clear-cloned!)
+
+'(local-position (the cam-target))
+'(local-rotation (the cam-target))
+
+(def cam-settings {
+:planet6 "[#unity/Vector3 [-14.1 11.3 0.0]
+#unity/Quaternion [-0.4741202 -0.4595214 0.6634804 -0.351915]]"
+:planet5 "[#unity/Vector3 [-12.92 6.5 0.0]
+#unity/Quaternion [0.09551297 0.7006264 -0.08907695 0.7014737]]"})
+
+
+(defn cam-config [k]
+  (when-let [d (get cam-settings k)]
+    ((fn [[p q]] (local-position! (the cam-target) p)
+      (local-rotation! (the cam-target) q))
+      (read-string d))))
+
+'(cam-config :planet5)
+

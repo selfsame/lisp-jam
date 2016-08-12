@@ -5,13 +5,13 @@
     tween.core
     hard.core hard.input hard.mesh hard.physics
     pdfn.core
-    clojure.pprint))
+    game.data))
 
 (def LEVELS 
   (atom (try (read-string (slurp "levels.edn")) 
-             (catch Exception e {}))))
+             (catch Exception e game.data/levels))))
 
-(def ASSETS (atom [:ball-spawn :tree-spawn :eye-spawn :rocket-spawn :gate-spawn]))
+(def ASSETS (atom [:editor :tree-spawn  :gate :star :ai-ship :star-ship]))
 
 
 (def status (atom "dev"))
@@ -37,7 +37,8 @@
             (fn [o] {
               :type (keyword (.name o))
               :position (->v3 o)
-              :rotation (.* o>Transform.rotation)})
+              :rotation (.* o>Transform.rotation)
+              :state (state o)})
             (remove 
               (comp #{"spawn"} (prop* name))
               (children planet))))))

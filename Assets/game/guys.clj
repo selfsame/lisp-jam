@@ -27,7 +27,7 @@
         n (.name o)]
     (spawn o s)))
 
-(def radar-v3s (vertices (resource "icosphere42")))
+(def radar-v3s '(vertices (resource "icosphere42")))
 
 (defn ball-update [o]
   (when (rand-nth [nil nil nil true])
@@ -69,11 +69,11 @@
     ;(hook+ ball :on-draw-gizmos #'game.core/ball-gizmos)
     ball))
 
-(defn init-ball [o]
+#_(defn init-ball [o]
   (let [sc (?f 2.0 8.0)
         ball (ball-test (v3+ (->v3 o) (local-direction o (->v3 0 (* sc 0.5) 0))))]
     (local-scale! ball (v3 sc))
-    (rotate! ball (rotation o))))
+    (rotate! ball (rotation o))) )
 
 '(state! (the eye-spawn) 
   {:eye-spawn true})

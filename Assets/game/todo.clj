@@ -9,8 +9,8 @@
   ([x] levels.edn data for planets)
   ([x] in game editor)
   ([ ] cycle spawn type))
-'([ ] fix planetoid constraints
-  ([ ] step algo based on speed))
+'([/] fix planetoid constraints
+  ([/] step algo based on speed))
 '([ ] obstacles)
 '([ ] enemies)
 '([ ] menu)
